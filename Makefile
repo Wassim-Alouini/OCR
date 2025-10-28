@@ -1,6 +1,3 @@
-all : reader.c main.c
-	gcc reader.c main.c -Wall -Wextra -Werror -fsanitize=address -o reader
-	./reader
-
-clean :
-	rm reader
+all : main.c image_loader.c window_manager.c
+	gcc -o main main.c image_loader.c window_manager.c -lSDL2 -lm -Wall -Wextra
+	./main
