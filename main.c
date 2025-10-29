@@ -6,7 +6,7 @@
 #include <math.h>
 #include <string.h>
 #include "cmd_window.h"
-
+#include "bounds.h"
 
 void binarize(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Texture** window_output, Uint8 threshold);
 void rotate_and_render(SDL_Renderer* renderer, double angle, SDL_Surface* master_surface, SDL_Window* window, SDL_Texture** window_output);
@@ -40,6 +40,20 @@ int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Wind
 	if(strcmp(command, "binarize") == 0)
 	{
 	    binarize(renderer, master_surface, window_output, cmd);
+	}
+	if(strcmp(command, "boxes") == 0)
+	{
+	    int blob_count = 0;
+	    int* blob_sizes = NULL;
+	    Coord** blobs = find_blobs(master_surface, &blob_count, &blob_sizes);
+
+	    printf("Found %d blobs\n", blob_count);
+
+	    Box *boxes = compute_blob_boxes(blobs, blob_sizes, blob_count);
+
+	    draw_boxes(master_surface, boxes, blob_count, 255, 0, 0);
+
+	    *window_output = SDL_CreateTextureFromSurface(renderer, master_surface);
 	}
 
     }
