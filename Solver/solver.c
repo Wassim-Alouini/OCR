@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include "solver.h"
 
 // Turns every letter of the word into uppercase
 void strtoupper(char *word)
