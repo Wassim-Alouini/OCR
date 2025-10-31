@@ -121,13 +121,20 @@ int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Wind
 	if(strcmp(command, "rotate") == 0)
 	{
 	    rotate_and_render(renderer, cmd, master_surface, window, window_output);
-	    apply_rotation_to_surface(renderer, *window_output, &master_surface);
-	    SDL_Surface* s32 = SDL_ConvertSurfaceFormat(master_surface, SDL_PIXELFORMAT_ARGB8888, 0);
-	    if(s32)
-	    {
-		SDL_FreeSurface(master_surface);
-		master_surface = s32;
-	    }
+
+	    //TODO
+	    //Buggy part
+	    //applying the rotation on surface seems to cause issues,
+	    //perhaps messes with format of pixels
+
+
+	    //apply_rotation_to_surface(renderer, *window_output, &master_surface);
+	    //SDL_Surface* s32 = SDL_ConvertSurfaceFormat(master_surface, SDL_PIXELFORMAT_ARGB8888, 0);
+	    //if(s32)
+	    //{
+		//SDL_FreeSurface(master_surface);
+		//master_surface = s32;
+	    //}
 	}
 
 	if(strcmp(command, "grayscale") == 0)
