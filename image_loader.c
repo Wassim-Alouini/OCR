@@ -1,10 +1,12 @@
 #include "image_loader.h"
 
+//Load BMP file as surface
 void load_image(SDL_Surface** surface_out, const char* file)
 {
     *surface_out = SDL_LoadBMP(file);
 }
 
+//Wrapper for CreateTextureFromSurface
 void create_texture_from_surface(SDL_Texture** texture_out, SDL_Renderer* renderer, SDL_Surface* surface)
 {
     *texture_out = SDL_CreateTextureFromSurface(renderer, surface);
@@ -14,6 +16,7 @@ void create_texture_from_surface(SDL_Texture** texture_out, SDL_Renderer* render
     }
 }
 
+//Rotate master texture and render it on window texture
 void render_texture_rotated
 (SDL_Renderer* renderer,
  SDL_Texture* texture, SDL_Texture* master_texture,

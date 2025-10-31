@@ -8,9 +8,99 @@
 #include "cmd_window.h"
 #include "bounds.h"
 
-void binarize(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Texture** window_output, Uint8 threshold);
-void rotate_and_render(SDL_Renderer* renderer, double angle, SDL_Surface* master_surface, SDL_Window* window, SDL_Texture** window_output);
-void apply_grayscale(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Texture** window_output);
+void binarize
+(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Texture** window_output, Uint8 threshold);
+void rotate_and_render
+(SDL_Renderer* renderer, double angle, SDL_Surface* master_surface, SDL_Window* window, SDL_Texture** window_output);
+void apply_grayscale
+(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Texture** window_output);
+
+//Given bounding boxes of elements (letters, words, grid, list of words)
+//Create BMP files containing the pixels bound by each box.
+void extract_boxes_to_bmp
+(SDL_Surface* master_surface, Box* boxes, int box_count, const char* folder)
+{
+    if (!master_surface || !boxes || box_count <= 0) 
+    {
+        fprintf(stderr, "extract_boxes_to_bmp: invalid input\n");
+        return;
+    }
+
+    for (int i = 0; i < box_count; i++) 
+    {
+        Box b = boxes[i];
+
+        if (b.x < 0) b.x = 0;
+        if (b.y < 0) b.y = 0;
+        if (b.x + b.w > master_surface->w) b.w = master_surface->w - b.x;
+        if (b.y + b.h > master_surface->h) b.h = master_surface->h - b.y;
+        if (b.w <= 0 || b.h <= 0) continue;
+
+        SDL_Rect rect = { b.x, b.y, b.w, b.h };
+        SDL_Surface* sub = SDL_CreateRGBSurfaceWithFormat(0, b.w, b.h,
+            master_surface->format->BitsPerPixel,
+            master_surface->format->format);
+        if (!sub) 
+	{
+            continue;
+        }
+        if (SDL_BlitSurface(master_surface, &rect, sub, NULL) < 0) 
+	{
+            SDL_FreeSurface(sub);
+            continue;
+        }
+        char filename[256];
+        snprintf(filename, sizeof(filename), "%s/_box_%d.bmp", folder ? folder : "images", i);
+        printf("Saved %s\n", filename);
+	
+        SDL_FreeSurface(sub);
+    }
+}
+
+//Copies the rendered rotated texture into the master_surface. Here master_surface must
+//be rotated so be able to apply the operations to it.
+void apply_rotation_to_surface
+    (SDL_Renderer* renderer, SDL_Texture* window_texture,
+    SDL_Surface** master_surface)
+{
+    if (!renderer || !window_texture || !master_surface || !(*master_surface)) 
+    {
+        SDL_Log("apply_rotation_to_surface: Invalid parameters");
+        return;
+    }
+    int tex_w, tex_h;
+    SDL_QueryTexture(window_texture, NULL, NULL, &tex_w, &tex_h);
+    SDL_Surface* rotated_surface = SDL_CreateRGBSurfaceWithFormat(0, tex_w, tex_h,
+        (*master_surface)->format->BitsPerPixel, (*master_surface)->format->format);
+    if (!rotated_surface) 
+    {
+        SDL_Log("apply_rotation_to_surface: Failed to create surface: %s", SDL_GetError());
+        return;
+    }
+    SDL_Texture* target = SDL_GetRenderTarget(renderer);
+    SDL_SetRenderTarget(renderer, window_texture);
+    if (SDL_RenderReadPixels(renderer, NULL,
+        rotated_surface->format->format,
+        rotated_surface->pixels,
+        rotated_surface->pitch) != 0)
+    {
+        SDL_Log("apply_rotation_to_surface: SDL_RenderReadPixels failed: %s", SDL_GetError());
+        SDL_FreeSurface(rotated_surface);
+        SDL_SetRenderTarget(renderer, target);
+        return;
+    }
+
+    SDL_SetRenderTarget(renderer, target);
+
+    SDL_Surface* converted = SDL_ConvertSurfaceFormat(rotated_surface, (*master_surface)->format->format, 0);
+    SDL_FreeSurface(rotated_surface);
+
+    SDL_FreeSurface(*master_surface);
+    *master_surface = converted;
+}
+
+//Event handler manages quitting, as well as terminal inputs "rotate <angle>"
+//"grayscale" "binarize <threshold>" "boxes"
 int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Window* window, SDL_Texture** window_output)
 {
     SDL_Event current;
@@ -31,6 +121,13 @@ int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Wind
 	if(strcmp(command, "rotate") == 0)
 	{
 	    rotate_and_render(renderer, cmd, master_surface, window, window_output);
+	    apply_rotation_to_surface(renderer, *window_output, &master_surface);
+	    SDL_Surface* s32 = SDL_ConvertSurfaceFormat(master_surface, SDL_PIXELFORMAT_ARGB8888, 0);
+	    if(s32)
+	    {
+		SDL_FreeSurface(master_surface);
+		master_surface = s32;
+	    }
 	}
 
 	if(strcmp(command, "grayscale") == 0)
@@ -45,22 +142,26 @@ int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Wind
 	{
 	    int blob_count = 0;
 	    int* blob_sizes = NULL;
-	    Coord** blobs = find_blobs(master_surface, &blob_count, &blob_sizes);
+	    Coord** blobs = find_blobs_rec(master_surface, &blob_count, &blob_sizes);
 
 	    printf("Found %d blobs\n", blob_count);
 
 	    Box *boxes = compute_blob_boxes(blobs, blob_sizes, blob_count);
+	    int newcount;
+	    Box* myboxes = extract(boxes, blob_count, &newcount);
 
-	    draw_boxes(master_surface, boxes, blob_count, 255, 0, 0);
+	    draw_boxes(master_surface, myboxes, newcount, 255, 0, 0);
 
 	    *window_output = SDL_CreateTextureFromSurface(renderer, master_surface);
+
+	    extract_boxes_to_bmp(master_surface, myboxes, newcount, "images");
 	}
 
     }
-
     return 1;
 }
 
+//Update loop, renders the texture while running.
 void update(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Window* window, SDL_Texture** texture)
 {
     int running = 1;
@@ -72,6 +173,7 @@ void update(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Window* win
     }
 }
 
+//Main initializes elements, calls update, and terminates elements after Quit
 int main() 
 {
 
@@ -97,15 +199,6 @@ int main()
     TTF_Init();
 
     cmdwindow_init();
-
-
-    //init image "input.bmp" as surface DONE
-    //init renderer DONE
-    //resize window (trig calculate maximum bounding box after rotation) DONE
-    //create texture (of same new window size) DONE
-    //create texture from surface  DONE
-    //copy surfacetexture to window texture DONE
-
     SDL_Surface *master_surface = NULL;
     load_image(&master_surface, "output.bmp");
 
@@ -148,6 +241,7 @@ int main()
     return EXIT_SUCCESS;
 }
 
+//Rotates and renders a texture.
 void rotate_and_render(SDL_Renderer* renderer, double angle, SDL_Surface* master_surface, SDL_Window* window, SDL_Texture** window_output)
 {
     double w = (double) (master_surface -> w);
@@ -163,6 +257,12 @@ void rotate_and_render(SDL_Renderer* renderer, double angle, SDL_Surface* master
     SDL_SetWindowSize(window, maxw, maxh);
     SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 
+    if (*window_output) 
+    {
+        SDL_DestroyTexture(*window_output);
+        *window_output = NULL;
+    }
+
     SDL_Texture *window_texture = NULL;
     initialize_window_texture(&window_texture, renderer, maxw, maxh);
 
@@ -175,16 +275,16 @@ void rotate_and_render(SDL_Renderer* renderer, double angle, SDL_Surface* master
     terminate_texture(image_texture);
 }
 
+//Applies grayscale filter to surface
 void apply_grayscale(SDL_Renderer* renderer,
                      SDL_Surface* master_surface,
                      SDL_Texture** window_output)
 {
-    if (!renderer || !master_surface || !window_output) {
+    if (!renderer || !master_surface || !window_output) 
+    {
         fprintf(stderr, "apply_grayscale: invalid argument\n");
         return;
     }
-
-    // Lock the surface if needed
     if (SDL_MUSTLOCK(master_surface))
         SDL_LockSurface(master_surface);
 
@@ -193,34 +293,30 @@ void apply_grayscale(SDL_Renderer* renderer,
     SDL_PixelFormat *fmt = master_surface->format;
     int total_pixels = master_surface->w * master_surface->h;
 
-    for (int i = 0; i < total_pixels; i++) {
+    for (int i = 0; i < total_pixels; i++) 
+    {
         SDL_GetRGB(pixels[i], fmt, &r, &g, &b);
-
-        // Standard luminance grayscale conversion
         Uint8 gray = (Uint8)(0.299 * r + 0.587 * g + 0.114 * b);
-
         pixels[i] = SDL_MapRGB(fmt, gray, gray, gray);
     }
 
     if (SDL_MUSTLOCK(master_surface))
         SDL_UnlockSurface(master_surface);
-
-    // Destroy old texture
     if (*window_output)
         SDL_DestroyTexture(*window_output);
-
-    // Create new texture from the modified surface
     *window_output = SDL_CreateTextureFromSurface(renderer, master_surface);
     if (!*window_output)
         fprintf(stderr, "apply_grayscale: texture creation failed: %s\n", SDL_GetError());
 }
 
+//Given a threshold, binarizes surface, such that if pixel is above threshold it is made white, otherwise black
 void binarize(SDL_Renderer* renderer,
 		SDL_Surface* master_surface,
                 SDL_Texture **window_output,
                 Uint8 threshold)
 {
-    if (!renderer || !master_surface || !window_output) {
+    if (!renderer || !master_surface || !window_output) 
+    { 
         fprintf(stderr, "apply_binarization: invalid argument\n");
         return;
     }
@@ -233,9 +329,9 @@ void binarize(SDL_Renderer* renderer,
     SDL_PixelFormat* fmt = master_surface->format;
     int total_pixels = master_surface->w * master_surface->h;
 
-    for (int i = 0; i < total_pixels; i++) {
+    for (int i = 0; i < total_pixels; i++) 
+    {
         SDL_GetRGB(pixels[i], fmt, &r, &g, &b);
-        // since grayscale: r==g==b
         Uint8 bw = (r < threshold) ? 0 : 255;
         pixels[i] = SDL_MapRGB(fmt, bw, bw, bw);
     }
