@@ -52,6 +52,22 @@ void extract_boxes_to_bmp
         char filename[256];
         snprintf(filename, sizeof(filename), "%s/_box_%d.bmp", folder ? folder : "images", i);
         printf("Saved %s\n", filename);
+
+        if (folder) 
+        {
+            char cmd[512];
+            snprintf(cmd, sizeof(cmd), "mkdir -p %s", folder);
+            system(cmd);
+        }
+
+        if (SDL_SaveBMP(sub, filename) != 0) 
+        {
+            fprintf(stderr, "Erreur lors de la sauvegarde de %s: %s\n", filename, SDL_GetError());
+        } 
+        else 
+        {
+        printf("Saved %s\n", filename);
+        }
 	
         SDL_FreeSurface(sub);
     }
