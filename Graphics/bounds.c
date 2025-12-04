@@ -483,8 +483,23 @@ Box* differentiate_grid_list_and_words(Box* sorted, int n, int* out_count)
     return result;
 }
 
-//compare boxes a and b, for qsort (used in previous attempt), by Y then X
+
 int boxcmp(const void* a, const void* b)
+{
+    const Box* A = (const Box*)a;
+    const Box* B = (const Box*)b;
+
+    const int threshold = 5;
+
+    if (abs(A->y - B->y) <= threshold)
+        return A->x - B->x;
+
+    return A->y - B->y;
+}
+
+
+//compare boxes a and b, for qsort (used in previous attempt), by Y then X
+/*int boxcmp(const void* a, const void* b)
 {
 
     const Box* boxa = (const Box*)a;
@@ -502,4 +517,4 @@ int boxcmp(const void* a, const void* b)
 	return -1;
     }
     return 1;
-}
+}*/

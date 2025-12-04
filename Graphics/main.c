@@ -7,6 +7,9 @@
 #include <string.h>
 #include "cmd_window.h"
 #include "bounds.h"
+#include "detectgrid.h"
+
+int ended = 0;
 
 void binarize
 (SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Texture** window_output, Uint8 threshold);
@@ -29,6 +32,11 @@ void extract_boxes_to_bmp
     for (int i = 0; i < box_count; i++) 
     {
         Box b = boxes[i];
+	
+//	b.x -= 1;
+//	b.y -= 1;
+//	b.w += 2;
+//	b.h += 2;
 
         if (b.x < 0) b.x = 0;
         if (b.y < 0) b.y = 0;
@@ -51,7 +59,7 @@ void extract_boxes_to_bmp
         }
         char filename[256];
         snprintf(filename, sizeof(filename), "%s/_box_%d.bmp", folder ? folder : "images", i);
-        printf("Saved %s\n", filename);
+        //printf("Saved %s\n", filename);
 
         if (folder) 
         {
@@ -66,7 +74,7 @@ void extract_boxes_to_bmp
         } 
         else 
         {
-        printf("Saved %s\n", filename);
+        //printf("Saved %s\n", filename);
         }
 	
         SDL_FreeSurface(sub);
@@ -163,6 +171,8 @@ int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Wind
 	}
 	if(strcmp(command, "boxes") == 0)
 	{
+
+	    ended = 1;
 	    int blob_count = 0;
 	    int* blob_sizes = NULL;
 	    Coord** blobs = find_blobs_rec(master_surface, &blob_count, &blob_sizes);
@@ -173,11 +183,52 @@ int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Wind
 	    int newcount;
 	    Box* myboxes = extract(boxes, blob_count, &newcount);
 
-	    draw_boxes(master_surface, myboxes, newcount, 255, 0, 0);
+	    //Luca
+
+	    int testCount;
+	    Box* testBox = Find_Letters(myboxes,newcount,&testCount);
+	    Box*** gridBoxes = malloc(sizeof(Box**));
+	    Box*** wordBoxes = malloc(sizeof(Box**));
+	    int** gridCount = malloc(sizeof(int*));
+	    int** wordCount = malloc(sizeof(int*));
+	    int nbLinesGrid = 0;
+	    int nbLinesWord = 0;
+
+
+	   //Box* testBox2 = organised_letter_box(myboxes,testBox,newcount,testCount);
+	   //free(testBox);
+	   separate_grid_word(testBox,testCount,gridBoxes,gridCount,wordBoxes,
+			   wordCount,&nbLinesGrid,&nbLinesWord);
+
+
+	   printf("nblettres: %i\n",testCount);
+	   printf("nbword: %i\n",nbLinesWord);
+	   /*for(int i = 0; i < nbLinesGrid;i++)
+	   {
+		draw_boxes(master_surface,(*gridBoxes)[i],(*gridCount)[i],0,0,255);
+	   }
+
+	   for(int i = 0; i < nbLinesWord;i++)
+	   {
+		draw_boxes(master_surface,(*wordBoxes)[i],(*wordCount)[i],255,0,0);	
+	   }*/
+
+	   //draw_boxes(master_surface, myboxes, newcount, 255, 0, 0);
+	    
+	    //Luca
+	    //draw_boxes(master_surface,testBox,testCount,255,0,0);
+	    //draw_boxes(master_surface,*gridBoxes,gridCount,255,0,0);
+	    //draw_boxes(master_surface,*wordBoxes,wordCount,0,255,0);
+
+
 
 	    *window_output = SDL_CreateTextureFromSurface(renderer, master_surface);
 
-	    extract_boxes_to_bmp(master_surface, myboxes, newcount, "images");
+	    draw_word(renderer,gridBoxes,5,5,0,0);
+	    draw_word(renderer,gridBoxes,7,7,8,8);
+
+	    extract_boxes_to_bmp(master_surface, testBox, testCount, "images");
+
 	}
 
     }
@@ -191,8 +242,11 @@ void update(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Window* win
     while (running)
     {
         running = event_handler(renderer, master_surface, window, texture);
-        SDL_RenderCopy(renderer, *texture, NULL, NULL);
-        SDL_RenderPresent(renderer);
+	if(!ended)
+	{
+            SDL_RenderCopy(renderer, *texture, NULL, NULL);
+            SDL_RenderPresent(renderer);
+	}
     }
 }
 
