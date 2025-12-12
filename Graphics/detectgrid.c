@@ -1,5 +1,6 @@
 #include "detectgrid.h"
 
+
 /*Box* Init(SDL_Surface* surface,int* boxCount)
 {
     int blob_count = 0;
@@ -22,12 +23,12 @@ int box_height_cmp ( const void * first, const void * second )
     return (firstBox->h) - (secondBox->h);
 }
 
-/*int middle_cmp ( const void * first, const void * second ) 
+int distance_cmp ( const void * first, const void * second ) 
 {
-    float * a =  (const float *) first;
-    float * b =  (const float *) second;
+    const float * a =  (const float *) first;
+    const float * b =  (const float *) second;
     return (*a) - (*b);
-}*/
+}
 
 int middle_cmp(const void *a, const void *b)
 {
@@ -265,6 +266,50 @@ float  calculate_distance(int x1, int y1, int x2,int y2)
 	return sqrtf(distanceX * distanceX + distanceY * distanceY);
 }
 
+float calculate_distance_mediane(float* array, int count)
+{
+    float mediane = 0;
+    int middle = count / 2;
+
+    if(count % 2 == 0)
+    {
+		double distance1 = array[middle];
+		double distance2 = array[middle - 1];
+		mediane = (distance1 + distance2) / 2;
+		
+		return mediane;
+    }
+
+    mediane = array[middle];
+    return mediane;
+}
+
+float median_distance(Box* boxes, int boxCount)
+{
+	float *array = malloc((boxCount - 1) * sizeof(float));
+	for(int i = 0; i < boxCount - 1; i++)
+	{
+		int x1 = 0;
+		int x2 = 0;
+		int y1 = 0;
+		int y2 = 0;
+	
+		middle_box(boxes[i],&x1,&y1);
+		middle_box(boxes[i+1],&x2,&y2);
+
+		float distance = calculate_distance(x1,y1,x2,y2);
+
+		array[i] = distance;
+	}
+
+	qsort(array,boxCount - 1,sizeof(float),distance_cmp);
+
+	float mediane = calculate_distance_mediane(array,boxCount - 1);
+	free(array);
+	return mediane;
+}
+
+
 void separate_grid_word(Box* boxes, int boxCount, Box*** gridBoxes,
 		int** gridCount, Box*** wordBoxes, int** wordCount,
 		int* nbLinesGrid, int* nbLinesWord)
@@ -277,6 +322,8 @@ void separate_grid_word(Box* boxes, int boxCount, Box*** gridBoxes,
 	int count = 0;
 	int maxLineSize = 0;
 	int nbGridLine = 0;
+	float threshold = median_distance(boxes,boxCount) + 10.0;
+	printf("distance mediane : %f\n",threshold);
 
 	while(count < boxCount && index < boxCount)
 	{
@@ -297,7 +344,7 @@ void separate_grid_word(Box* boxes, int boxCount, Box*** gridBoxes,
 			float distance = calculate_distance(x1,y1,x2,y2);
 
 			printf("distance: %f\n",distance);
-			if(distance < 70.0) //valeur a determiner
+			if(distance < threshold) //valeur a determiner 70.0
 			{
 				size++;
 			}
@@ -432,9 +479,12 @@ void draw_word(SDL_Renderer *renderer, Box ***boxes,
                             int x1, int y1, int x2, int y2) 
 {
 
-    int radius = (*boxes)[y1][x1].w;	
+    int radius = (*boxes)[y1][x1].h;	
     // Définir la couleur ici (rouge semi-transparent)
-    SDL_Color color = {255, 0, 0, 10};
+	int r = rand() % 256;
+	int g = rand() % 256;
+	int b = rand() % 256;
+    SDL_Color color = {r, g, b, 10};
 
     // Calculer le centre des boxes
     int cx1 = (*boxes)[y1][x1].x + (*boxes)[y1][x1].w / 2;

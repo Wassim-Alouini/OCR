@@ -21,7 +21,11 @@ GRAPHICS_SRCS = $(GRAPHICS_DIR)/main.c \
                 $(GRAPHICS_DIR)/window_manager.c \
                 $(GRAPHICS_DIR)/cmd_window.c \
                 $(GRAPHICS_DIR)/bounds.c\
-		$(GRAPHICS_DIR)/detectgrid.c
+				$(GRAPHICS_DIR)/detectgrid.c\
+				$ Solver/solver.c\
+				$(GRAPHICS_DIR)/neural_network.c\
+				$(GRAPHICS_DIR)/preprocess.c
+				
 NEURAL_SRCS = $(NEURAL_DIR)/main.c \
               $(NEURAL_DIR)/neuralnetwork.c
 

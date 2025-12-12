@@ -8,6 +8,11 @@
 #include "cmd_window.h"
 #include "bounds.h"
 #include "detectgrid.h"
+#include "config.h"
+#include "neural_network.h"
+#include "preprocess.h"
+#include "../Solver/solver.h"
+#include <time.h>
 
 int ended = 0;
 
@@ -17,6 +22,11 @@ void rotate_and_render
 (SDL_Renderer* renderer, double angle, SDL_Surface* master_surface, SDL_Window* window, SDL_Texture** window_output);
 void apply_grayscale
 (SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Texture** window_output);
+char *line_maker(int lineCount,const char* folder,char* modele);
+void grid_maker(Box*** gridLines,int **gridCount,
+		int nbLinesGrid,SDL_Surface** master_surface, char* modele);
+char** word_maker(Box*** wordLines,int **wordCount,int nbLinesWord,SDL_Surface** master_surface,char* modele);
+void solver_call(SDL_Renderer* renderer,Box*** gridBoxes,char **wordlist, int nbLinesWord,int* x1, int* y1, int* x2,int* y2);
 
 //Given bounding boxes of elements (letters, words, grid, list of words)
 //Create BMP files containing the pixels bound by each box.
@@ -224,15 +234,50 @@ int event_handler(SDL_Renderer* renderer,  SDL_Surface* master_surface, SDL_Wind
 
 	    *window_output = SDL_CreateTextureFromSurface(renderer, master_surface);
 
-	    draw_word(renderer,gridBoxes,5,5,0,0);
-	    draw_word(renderer,gridBoxes,7,7,8,8);
+	    //draw_word(renderer,gridBoxes,5,5,0,0);
+	    //draw_word(renderer,gridBoxes,7,7,8,8);
 
-	    extract_boxes_to_bmp(master_surface, testBox, testCount, "images");
+	    //extract_boxes_to_bmp(master_surface, testBox, testCount, "images");
 
+        //Luca Test
+        int x1 = 0;
+        int y1 = 0;
+        int x2 = 0;
+        int y2 = 0;
+        grid_maker(gridBoxes,gridCount,nbLinesGrid,&master_surface,"Graphics/model/newmodel.txt");
+        char** wordlist = word_maker(wordBoxes,wordCount,nbLinesWord,&master_surface,"Graphics/model/newmodel.txt");
+        solver_call(renderer,gridBoxes,wordlist,nbLinesWord,&x1,&y1,&x2,&y2);
+        //draw_word(renderer,gridBoxes,y1,x1,y2,x2);
+
+        if(remove("grid.txt") != 0)
+        printf("remove\n");
 	}
 
     }
+
     return 1;
+}
+
+char *line_maker(int lineCount,const char* folder,char* model)
+{
+	char* res = malloc((lineCount + 1) * sizeof(char));
+	if(!res)
+	{
+		fprintf(stderr, "line_maker: Error malloc\n");
+		return NULL;
+	}
+
+	for(int i = 0; i < lineCount; i++)
+	{
+		char filename[256];
+        snprintf(filename, sizeof(filename), "%s/_box_%d.bmp", folder, i);
+		char letter = nn_predict_letter(model,filename);
+		res[i] = letter;
+	}
+
+	res[lineCount] = 0;
+    printf("%s\n",res);
+	return res;
 }
 
 //Update loop, renders the texture while running.
@@ -248,6 +293,100 @@ void update(SDL_Renderer* renderer, SDL_Surface* master_surface, SDL_Window* win
             SDL_RenderPresent(renderer);
 	}
     }
+}
+
+void grid_maker(Box*** gridLines,int **gridCount,
+		int nbLinesGrid,SDL_Surface** master_surface, char* model)
+{
+	for(int i = 0; i < nbLinesGrid; i++)
+	{
+		extract_boxes_to_bmp(*master_surface,(*gridLines)[i],(*gridCount)[i], "images");
+		char* line = line_maker((*gridCount)[i],"images",model);
+		if(!line)
+		{
+			return;
+		}
+
+                char filename[256];
+
+                for (int j = 0; j < (*gridCount)[i]; j++)
+                {
+                        snprintf(filename,sizeof(filename),"%s/_box_%d.bmp","images",j);
+                        if (remove(filename) != 0)
+                        {
+                                return;
+                        }
+                }
+
+		FILE *f = fopen("grid.txt", "a");
+    		if (!f)
+		{
+			free(line);	
+        		return;
+		}
+
+    		fprintf(f, "%s\n",line);
+
+    		fclose(f);
+		free(line);
+	}
+	
+}
+
+char** word_maker(Box*** wordLines,int **wordCount,int nbLinesWord,SDL_Surface** master_surface,char* modele)
+{
+	char ** wordList = malloc(nbLinesWord * sizeof(char*));
+	if(!wordList)
+		return NULL;
+
+        for(int i = 0; i < nbLinesWord; i++)
+        {
+                extract_boxes_to_bmp(*master_surface,(*wordLines)[i],(*wordCount)[i], "images");
+                char* line = line_maker((*wordCount)[i],"images",modele);
+                if(!line)
+		{
+			for (int k = 0; k < i; k++)
+                	{
+				free(wordList[k]);
+			}
+
+		    	free(wordList);
+            		return NULL;
+		}
+		
+		char filename[256];
+
+    		for (int j = 0; j < (*wordCount)[i]; j++)
+    		{
+		        snprintf(filename,sizeof(filename),"%s/_box_%d.bmp","images",j);
+	
+        		if (remove(filename) != 0)
+        		{
+				for (int k = 0; k < i; k++)
+                        	{
+                                	free(wordList[k]);
+                        	}
+
+                        	free(wordList);
+                        	return NULL;
+        		}
+    		}
+
+        	wordList[i] = line;        
+        }
+
+
+	return wordList;
+}
+
+void solver_call(SDL_Renderer* renderer,Box*** gridBoxes,char **wordlist, int nbLinesWord,int* x1, int* y1, int* x2,int* y2)
+{
+	for(int i = 0; i < nbLinesWord; i++)
+	{
+		solver("grid.txt",wordlist[i],x1,y1,x2,y2);
+        srand(time(NULL));
+        draw_word(renderer,gridBoxes,*y1,*x1,*y2,*x2);
+	}
 }
 
 //Main initializes elements, calls update, and terminates elements after Quit
