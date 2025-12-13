@@ -12,16 +12,16 @@ static inline int is_adjacent(Coord a, Coord b)
 
 //Recursive algorithm to find blobs of black pixels in surface,
 //array of array of points blob and its size blob_size
-void flood_fill(SDL_Surface *surface, int x, int y,
+void flood_fill(SDL_Surface **surface, int x, int y,
                 int **visited, Coord **blob, int *blob_size) 
 {
-    int w = surface->w;
-    int h = surface->h;
+    int w = (*surface)->w;
+    int h = (*surface)->h;
     if (x < 0 || y < 0 || x >= w || y >= h) return;
     if (visited[y][x]) return;
-    int stride = surface->pitch / 4;
-    Uint32 *pixels = (Uint32 *)surface->pixels;
-    SDL_PixelFormat *fmt = surface->format;
+    int stride = (*surface)->pitch / 4;
+    Uint32 *pixels = (Uint32 *)(*surface)->pixels;
+    SDL_PixelFormat *fmt = (*surface)->format;
     Uint8 r, g, b;
     Uint32 pixel = pixels[y * stride + x];
     SDL_GetRGB(pixel, fmt, &r, &g, &b);
@@ -46,14 +46,23 @@ void flood_fill(SDL_Surface *surface, int x, int y,
 
 //main function of the blob finding algorithm, reads surface pixels, when black pixel
 //is encountered run flood_fill to visit all the blob, visited pixels are later ignored.
-Coord **find_blobs_rec(SDL_Surface *surface, int *blob_count, int **blob_sizes_out) 
+Coord **find_blobs_rec(SDL_Surface **surface, int *blob_count, int **blob_sizes_out) 
 {
+
+    
     if (!surface || !blob_count || !blob_sizes_out) return NULL;
 
-    if (SDL_MUSTLOCK(surface))
-        SDL_LockSurface(surface);
+        if ((*surface)->format->BytesPerPixel != 4) 
+        {
+            fprintf(stderr, "find_blobs_rec: unsupported BPP (%d), expected 4\n",
+            (*surface)->format->BytesPerPixel);
+            return NULL;
+        }
 
-    int w = surface->w, h = surface->h;
+    if (SDL_MUSTLOCK((*surface)))
+        SDL_LockSurface((*surface));
+
+    int w = (*surface)->w, h = (*surface)->h;
     int **visited = malloc(h * sizeof(int *));
     for (int y = 0; y < h; y++) 
     {
@@ -70,10 +79,10 @@ Coord **find_blobs_rec(SDL_Surface *surface, int *blob_count, int **blob_sizes_o
 	{
             if (visited[y][x]) continue;
 
-            Uint32 *pixels = (Uint32 *)surface->pixels;
-            SDL_PixelFormat *fmt = surface->format;
+            Uint32 *pixels = (Uint32 *)(*surface)->pixels;
+            SDL_PixelFormat *fmt = (*surface)->format;
             Uint8 r, g, b;
-	    int stride = surface->pitch / 4;
+	    int stride = (*surface)->pitch / 4;
             Uint32 pixel = pixels[y * stride + x];
             SDL_GetRGB(pixel, fmt, &r, &g, &b);
 
@@ -95,30 +104,30 @@ Coord **find_blobs_rec(SDL_Surface *surface, int *blob_count, int **blob_sizes_o
     for (int y = 0; y < h; y++) free(visited[y]);
     free(visited);
 
-    if (SDL_MUSTLOCK(surface))
-        SDL_UnlockSurface(surface);
+    if (SDL_MUSTLOCK((*surface)))
+        SDL_UnlockSurface((*surface));
 
     *blob_sizes_out = blob_sizes;
     return res;
 }
 
 //first attempt at a blob finding algorithm, naive iterative approach.
-Coord **find_blobs(SDL_Surface *surface, int *blob_count, int **blob_sizes_out) 
+Coord **find_blobs(SDL_Surface **surface, int *blob_count, int **blob_sizes_out) 
 {
-    if (!surface || !blob_count || !blob_sizes_out) return NULL;
+    if (!(*surface) || !blob_count || !blob_sizes_out) return NULL;
 
-    if (SDL_MUSTLOCK(surface))
-        SDL_LockSurface(surface);
+    if (SDL_MUSTLOCK((*surface)))
+        SDL_LockSurface((*surface));
 
-    Uint32 *pixels = (Uint32 *)surface->pixels;
-    SDL_PixelFormat *fmt = surface->format;
-    int w = surface->w, h = surface->h;
+    Uint32 *pixels = (Uint32 *)(*surface)->pixels;
+    SDL_PixelFormat *fmt = (*surface)->format;
+    int w = (*surface)->w, h = (*surface)->h;
     Uint8 r, g, b;
 
     Coord **res = NULL;
     int *blob_sizes = NULL;
     *blob_count = 0;
-    int stride = surface->pitch / 4;
+    int stride = (*surface)->pitch / 4;
 
     for (int y = 0; y < h; y++) 
     {
@@ -162,8 +171,8 @@ Coord **find_blobs(SDL_Surface *surface, int *blob_count, int **blob_sizes_out)
         }
     }
 
-    if (SDL_MUSTLOCK(surface))
-        SDL_UnlockSurface(surface);
+    if (SDL_MUSTLOCK((*surface)))
+        SDL_UnlockSurface((*surface));
 
     *blob_sizes_out = blob_sizes;
     return res;
@@ -204,48 +213,114 @@ Box *compute_blob_boxes(Coord **blobs, int *blob_sizes, int blob_count)
 }
 
 //Given a box, draw it on the master_surface
-void draw_boxes(SDL_Surface *surface, Box *boxes, int count, Uint8 r, Uint8 g, Uint8 b) 
+void draw_boxes(SDL_Surface **surface, Box *boxes, int count, Uint8 r, Uint8 g, Uint8 b) 
 {
-    if (!surface || !boxes || count <= 0) return;
+    // --- DEBUG TESTS ---
+    printf("\n[draw_boxes] called\n");
+    printf("  surface ptr = %p\n", (void*)surface);
+    printf("  *surface    = %p\n", surface ? (void*)(*surface) : NULL);
+    printf("  boxes       = %p\n", (void*)boxes);
+    printf("  count       = %d\n", count);
+    printf("  color       = (%u, %u, %u)\n", r, g, b);
 
-    Uint32 color = SDL_MapRGB(surface->format, r, g, b);
+    if (!surface) {
+        printf("  ERROR: surface** is NULL\n");
+        return;
+    }
 
-    if (SDL_MUSTLOCK(surface))
-        SDL_LockSurface(surface);
+    if (!(*surface)) {
+        printf("  ERROR: *surface is NULL\n");
+        return;
+    }
 
-    Uint32 *pixels = (Uint32 *)surface->pixels;
-    int w = surface->w;
-    int stride = surface->pitch / 4;
+    SDL_Surface *s = *surface;
+
+    printf("  surface->w      = %d\n", s->w);
+    printf("  surface->h      = %d\n", s->h);
+    printf("  surface->pitch  = %d\n", s->pitch);
+    printf("  BitsPerPixel    = %d\n", s->format->BitsPerPixel);
+    printf("  BytesPerPixel   = %d\n", s->format->BytesPerPixel);
+
+    if (s->format->BytesPerPixel != 4) {
+        printf("  ERROR: draw_boxes assumes 32bpp (4 bytes per pixel) but surface is %d Bpp!\n",
+               s->format->BytesPerPixel);
+    }
+
+    if (s->pitch % 4 != 0) {
+        printf("  WARNING: pitch (%d) not divisible by 4, check stride logic.\n", s->pitch);
+    }
+
+    if (!boxes) {
+        printf("  ERROR: boxes is NULL\n");
+        return;
+    }
+
+    if (count <= 0) {
+        printf("  WARNING: count <= 0 (%d)\n", count);
+        return;
+    }
+
+    for (int i = 0; i < count; ++i) {
+        Box b = boxes[i];
+        printf("  box[%d]: x=%d y=%d w=%d h=%d\n", i, b.x, b.y, b.w, b.h);
+    }
+
+    if (SDL_MUSTLOCK(s)) {
+        printf("  SDL_MUSTLOCK: yes, trying SDL_LockSurface...\n");
+        if (SDL_LockSurface(s) != 0) {
+            printf("  ERROR: SDL_LockSurface failed: %s\n", SDL_GetError());
+            return;
+        } else {
+            printf("  SDL_LockSurface succeeded.\n");
+        }
+        SDL_UnlockSurface(s); // unlock immediately; main code will lock again if needed
+    } else {
+        printf("  SDL_MUSTLOCK: no\n");
+    }
+
+    // --- END DEBUG TESTS ---
+
+    // your original code can stay as-is below this line
+    if (!(*surface) || !boxes || count <= 0) return;
+
+    Uint32 color = SDL_MapRGB((*surface)->format, r, g, b);
+
+    if (SDL_MUSTLOCK((*surface)))
+        SDL_LockSurface((*surface));
+
+    Uint32 *pixels = (Uint32 *)(*surface)->pixels;
+    int w = (*surface)->w;
+    int stride = (*surface)->pitch / 4;
 
     for (int i = 0; i < count; i++) 
     {
         Box box = boxes[i];
 
         for (int x = box.x; x < box.x + box.w; x++) 
-	{
-            if (x >= 0 && x < surface->w) 
-	    {
-                if (box.y >= 0 && box.y < surface->h)
+        {
+            if (x >= 0 && x < (*surface)->w) 
+            {
+                if (box.y >= 0 && box.y < (*surface)->h)
                     pixels[box.y * stride + x] = color;
-                if (box.y + box.h - 1 >= 0 && box.y + box.h - 1 < surface->h)
+                if (box.y + box.h - 1 >= 0 && box.y + box.h - 1 < (*surface)->h)
                     pixels[(box.y + box.h - 1) * stride + x] = color;
             }
         }
 
         for (int y = box.y; y < box.y + box.h; y++) 
-	{
-            if (y >= 0 && y < surface->h) 
-	    {
-                if (box.x >= 0 && box.x < surface->w)
+        {
+            if (y >= 0 && y < (*surface)->h) 
+            {
+                if (box.x >= 0 && box.x < (*surface)->w)
                     pixels[y * stride + box.x] = color;
-                if (box.x + box.w - 1 >= 0 && box.x + box.w - 1 < surface->w)
+                if (box.x + box.w - 1 >= 0 && box.x + box.w - 1 < (*surface)->w)
                     pixels[y * stride + (box.x + box.w - 1)] = color;
             }
         }
     }
 
-    if (SDL_MUSTLOCK(surface))
-        SDL_UnlockSurface(surface);
+    if (SDL_MUSTLOCK((*surface)))
+        SDL_UnlockSurface((*surface));
 }
 
 //Are a and b on the same row ? approximation based on value of max_y_diff.
@@ -483,23 +558,8 @@ Box* differentiate_grid_list_and_words(Box* sorted, int n, int* out_count)
     return result;
 }
 
-
-int boxcmp(const void* a, const void* b)
-{
-    const Box* A = (const Box*)a;
-    const Box* B = (const Box*)b;
-
-    const int threshold = 5;
-
-    if (abs(A->y - B->y) <= threshold)
-        return A->x - B->x;
-
-    return A->y - B->y;
-}
-
-
 //compare boxes a and b, for qsort (used in previous attempt), by Y then X
-/*int boxcmp(const void* a, const void* b)
+int boxcmp(const void* a, const void* b)
 {
 
     const Box* boxa = (const Box*)a;
@@ -517,4 +577,4 @@ int boxcmp(const void* a, const void* b)
 	return -1;
     }
     return 1;
-}*/
+}

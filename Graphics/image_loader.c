@@ -3,7 +3,24 @@
 //Load BMP file as surface
 void load_image(SDL_Surface** surface_out, const char* file)
 {
-    *surface_out = SDL_LoadBMP(file);
+    if (!surface_out || !file)
+        errx(EXIT_FAILURE, "load_image: invalid argument");
+
+    SDL_Surface* raw = SDL_LoadBMP(file);
+    if (!raw)
+        errx(EXIT_FAILURE, "load_image: SDL_LoadBMP failed: %s", SDL_GetError());
+
+    // Avoid RLE surprises when doing direct pixel access later
+    SDL_SetSurfaceRLE(raw, 0);
+
+    // Force the format your pixel code assumes (Uint32 per pixel)
+    SDL_Surface* conv = SDL_ConvertSurfaceFormat(raw, SDL_PIXELFORMAT_RGBA32, 0);
+    SDL_FreeSurface(raw);
+
+    if (!conv)
+        errx(EXIT_FAILURE, "load_image: SDL_ConvertSurfaceFormat failed: %s", SDL_GetError());
+
+    *surface_out = conv;
 }
 
 //Wrapper for CreateTextureFromSurface
