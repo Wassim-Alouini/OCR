@@ -3,7 +3,7 @@
 #include "window_manager.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-#include <SDL2/SDL2_rotozoom.h>
+#include "rot.h"
 #include <math.h>
 #include <string.h>
 #include "cmd_window.h"
@@ -119,11 +119,11 @@ void RotateSurface(SDL_Surface **masterSurface, double alpha)
 
     SDL_Surface *src = *masterSurface;
 
-    // Work in 32-bit RGBA to keep things simple
+    // Keep everything in 32-bit RGBA32 (matches your pipeline)
     SDL_Surface *work = src;
     int must_free_work = 0;
 
-    if (src->format->BitsPerPixel != 32) {
+    if (src->format->format != SDL_PIXELFORMAT_RGBA32) {
         work = SDL_ConvertSurfaceFormat(src, SDL_PIXELFORMAT_RGBA32, 0);
         if (!work) {
             fprintf(stderr, "RotateSurface: SDL_ConvertSurfaceFormat failed: %s\n",
@@ -133,50 +133,46 @@ void RotateSurface(SDL_Surface **masterSurface, double alpha)
         must_free_work = 1;
     }
 
-    // angle in degrees, zoom = 1.0, smooth = 1
-    SDL_Surface *rotated = rotozoomSurface(work, alpha, 1.0, 1);
+    // IMPORTANT CHANGE #1: call YOUR function (from rot.c), not rotozoomSurface()
+    SDL_Surface *rotated = GFX_rotozoomSurface(work, alpha, 1.0, SMOOTHING_ON);
     if (!rotated) {
-        fprintf(stderr, "RotateSurface: rotozoomSurface failed: %s\n",
+        fprintf(stderr, "RotateSurface: GFX_rotozoomSurface failed: %s\n",
                 SDL_GetError());
-        if (must_free_work)
-            SDL_FreeSurface(work);
+        if (must_free_work) SDL_FreeSurface(work);
         return;
     }
 
     if (must_free_work)
         SDL_FreeSurface(work);
 
-    if (rotated->format->BitsPerPixel != 32) {
-        SDL_Surface *converted =
-            SDL_ConvertSurfaceFormat(rotated, SDL_PIXELFORMAT_RGBA32, 0);
+    // IMPORTANT CHANGE #2: force result back to RGBA32 (your code assumes 32-bit)
+    if (rotated->format->format != SDL_PIXELFORMAT_RGBA32) {
+        SDL_Surface *converted = SDL_ConvertSurfaceFormat(rotated, SDL_PIXELFORMAT_RGBA32, 0);
+        SDL_FreeSurface(rotated);
         if (!converted) {
             fprintf(stderr, "RotateSurface: post-convert failed: %s\n",
                     SDL_GetError());
-            SDL_FreeSurface(rotated);
             return;
         }
-        SDL_FreeSurface(rotated);
         rotated = converted;
     }
 
-    if (SDL_MUSTLOCK(rotated))
-        SDL_LockSurface(rotated);
+    // Keep your exact behavior: alpha==0 -> opaque white
+    if (SDL_MUSTLOCK(rotated)) SDL_LockSurface(rotated);
 
     Uint32 *pixels = (Uint32 *)rotated->pixels;
     SDL_PixelFormat *fmt = rotated->format;
-    int total = rotated->w * rotated->h;
+    const int total = rotated->w * rotated->h;
 
     for (int i = 0; i < total; ++i) {
         Uint8 r, g, b, a;
         SDL_GetRGBA(pixels[i], fmt, &r, &g, &b, &a);
-
         if (a == 0) {
-            pixels[i] = SDL_MapRGBA(fmt, 255, 255, 255, 255);  // white
+            pixels[i] = SDL_MapRGBA(fmt, 255, 255, 255, 255);
         }
     }
 
-    if (SDL_MUSTLOCK(rotated))
-        SDL_UnlockSurface(rotated);
+    if (SDL_MUSTLOCK(rotated)) SDL_UnlockSurface(rotated);
 
     SDL_FreeSurface(src);
     *masterSurface = rotated;
