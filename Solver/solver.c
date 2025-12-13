@@ -15,7 +15,8 @@ void strtoupper(char *word)
 }
 
 // Main algorithm to search a word inside the grid
-int algoSolver(int rows,int cols,char tab[rows][cols],char* word)
+int algoSolver(int rows,int cols,char tab[rows][cols],char* word,
+		int* x1,int* y1, int* x2, int* y2)
 {
     int len = strlen(word);
     strtoupper(word); // Convert the word to uppercase
@@ -70,6 +71,10 @@ int algoSolver(int rows,int cols,char tab[rows][cols],char* word)
                     if(indexW == len)
                     {
                         printf("(%i,%i) (%i,%i)\n",i,j,indexI-di,indexJ-dj);
+			*x1 = i;
+			*y1 = j;
+			*x2 = indexI-di;
+			*y2 = indexJ-dj;
                         return 1;
                     }
                 }
@@ -80,7 +85,7 @@ int algoSolver(int rows,int cols,char tab[rows][cols],char* word)
 }
 
 // Reads the grid from the file and launches the search
-void solver(char* filename,char* word)
+void solver(char* filename,char* word,int* x1,int* y1,int* x2,int* y2)
 {
     FILE *file = fopen(filename,"r");
 
@@ -106,7 +111,7 @@ void solver(char* filename,char* word)
     fclose(file);
 
     line[index] = 0;
-    rows++; // last line isn’t counted in the loop
+    //rows++; // last line isn’t counted in the loop
 
     int cols = nbchar / rows; // number of columns in the grid
 
@@ -123,14 +128,14 @@ void solver(char* filename,char* word)
     free(line);
 
     // If the word wasn’t found, print a message
-    if(!algoSolver(rows,cols,tab,word))
+    if(!algoSolver(rows,cols,tab,word,x1,y1,x2,y2))
     {
         printf("Not Found\n");
     }
 }
 
 // Main function
-int main(int argc, char* argv[])
+/*int main(int argc, char* argv[])
 {
     if(argc != 3)
     {
@@ -142,4 +147,4 @@ int main(int argc, char* argv[])
     solver(argv[1],argv[2]);
 
     return 0;
-}
+}*/

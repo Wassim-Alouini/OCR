@@ -1,30 +1,64 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <math.h>
+#include <err.h>
 #include "neuralnetwork.h"
+#include "../Graphics/config.h"
+#include "../Graphics/preprocess.h"
 
-//utilitary function
-//
+//sigmoid function used for the forward
+//max absolute value to avoid divergent values
+//of the exp function
+
+static void nn_logf(LogFn logger, void *ud, const char *fmt, ...)
+{
+    if (!logger) return;
+
+    char buf[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+
+    logger(ud, buf);
+}
 static double sigm(double x)
 {
-	return 1.0 / (1.0 + exp(-x));
+	if (x < -30.0)
+	{
+		return 1e-13;
+	}
+	if (x > 30.0)
+	{
+		return 1.0 - 1e-13;
+	}
+	
+	return 1.0/(1.0 + exp(-x));
 }
 
-static double sigm_prime(double x)
+
+//init bias and weignt with rand deterministic values
+//using sin() and w indices
+static double rand_w(int i, int j)
 {
-	return x * (1.0 - x);
+	double val = sin((i * 37 + j * 17 + 1) * 0.5);
+	return val;
 }
 
-
+//allocate a matrix to store the weight 
 static double **init_m(int rows, int cols)
 {
 	double **m = malloc(rows * sizeof(double *));
+
 	for (int i = 0; i < rows; i++)
 	{
 		m[i] = malloc(cols * sizeof(double));
 	}
+
 	return m;
 }
+
 
 
 
@@ -37,55 +71,51 @@ static void free_m(double **m, int rows)
 	free(m);
 
 }
-//generation of deterministic random values for the weight and bias init
-static double rand_w(int i, int j)
-{
-	double val = sin((i * 37 + j * 17 + 1) * 0.5);
-	return val;
-}
 
-
+//initialise a NeuralNetwork struct
 NeuralNetwork *init_nn(int inp, int h, int o, double lr)
-{
+{	
 	NeuralNetwork *nn = malloc(sizeof(NeuralNetwork));
 	nn->inp_0 = inp;
 	nn->h_1 = h;
 	nn->o_2 = o;
 	nn->lr = lr;
-	//dynamic allocation of weight and bias
+
 	nn->w_0_1 = init_m(inp, h);
-	nn->w_1_2 = init_m(h, o);       
+	nn->w_1_2 = init_m(h, o);
 	nn->b_1 = malloc(h * sizeof(double));
 	nn->b_2 = malloc(o * sizeof(double));
-	//init of weight ans bias 
-	for (int i = 0; i < inp; i++)
+
+
+	for (int i = 0; i < inp; ++i)
 	{
-		for (int j = 0; j < h; j++)
+		for (int j = 0; j < h; ++j)
 		{
 			nn->w_0_1[i][j] = rand_w(i, j);
 		}
 	}
-	
-	for (int i = 0; i < h; i++)
+	for (int j = 0; j < h; ++j)
 	{
-		for (int j = 0; j < o; j++)
+		nn->b_1[j] = rand_w(j + 20, j + 20);
+	}
+
+
+
+	for (int j = 0; j < h; ++j)
+	{
+		for (int k = 0; k < o; ++k)
 		{
-			nn->w_1_2[i][j] = rand_w(i + 10, j + 10);
+			nn->w_1_2[j][k] = rand_w(j + 10, k + 10);
 		}
 	}
-	
-	for (int j = 0; j < h; j++)
+	for (int k = 0; k < o; ++k)
 	{
-		nn->b_1[j] = rand_w(j + 100, j);
+		nn->b_2[k] = rand_w(k + 30, k + 30);
 	}
-	
-	for (int j = 0; j < o; j++)
-	{
-		nn->b_2[j] = rand_w(j + 200, j);
-	}
-	
+
 	return nn;
 }
+
 
 void free_nn(NeuralNetwork *nn)
 {
@@ -96,131 +126,365 @@ void free_nn(NeuralNetwork *nn)
 	free(nn);
 }
 
-//compute the output of the nn depending on the input data given
-double *forward(NeuralNetwork *nn, double *input) 
+//compute the output layer from the input given in parameter
+void forward(NeuralNetwork *nn, const double *input, double *hidden, double *output)
 {
-	double *h_1 = malloc(nn->h_1 * sizeof(double));
-	double *o_2 = malloc(nn->o_2 * sizeof(double));
-	
-	for (int j = 0; j < nn->h_1; j++)
+
+	int inp = nn->inp_0;
+	int h = nn->h_1;
+	int out = nn->o_2;
+
+
+	for (int j = 0; j < h; ++j)
 	{
 		double z = nn->b_1[j];
-		for (int i = 0; i < nn->inp_0; i++)
+		for (int i = 0; i < inp; ++i)
 		{
 			z += input[i] * nn->w_0_1[i][j];
 		}
-		h_1[j] = sigm(z);
+		hidden[j] = sigm(z);
 	}
-	for (int k = 0; k < nn->o_2; k++) 
+
+
+	double *out_val = malloc(sizeof(double) * out);
+
+	for (int k = 0; k < out; ++k)
 	{
 		double z = nn->b_2[k];
-		for (int j = 0; j < nn->h_1; j++)
+
+		for (int j = 0; j < h; ++j)
 		{
-			z += h_1[j] * nn->w_1_2[j][k];
-			o_2[k] = sigm(z);
+			z += hidden[j] * nn->w_1_2[j][k];
+		}
+
+		out_val[k] = z;
+	}
+
+	//softmax to convert output values to probabilities
+	double max_val = out_val[0];
+	for (int k = 1; k < out; ++k)
+	{
+		if (out_val[k] > max_val)
+		{
+			max_val = out_val[k];
 		}
 	}
-	free(h_1);
-	return o_2;
+
+	double sum_exp = 0.0;
+	for (int k = 0; k < out; ++k)
+	{
+		output[k] = exp(out_val[k] - max_val);
+		sum_exp += output[k];
+	}
+	for (int k = 0; k < out; ++k)
+	{
+		output[k] /= sum_exp;
+	}
+
+	free(out_val);
 }
 
-//backprop: 1 epoch = 4 backprop : 1 for each data input possible
-void SGD(NeuralNetwork *nn, double inputs[][2], double labels[][1], int data, int epochs) 
+//training loop 
+void SGD(NeuralNetwork *nn, Dataset *ds, int epochs, double lr,
+         LogFn logger, void *logger_userdata)
 {
-	for (int epoch = 0; epoch < epochs; epoch++)
+	int inp = nn->inp_0;
+	int h = nn->h_1;
+	int out = nn->o_2;
+
+	double *h_1 = malloc(sizeof(double) * h);
+	double *o_2 = malloc(sizeof(double) * out);
+	double *grad_h_1 = malloc(sizeof(double) * h);
+	double *grad_o_2 = malloc(sizeof(double) * out);
+
+	for (int epoch = 0; epoch < epochs; ++epoch)
 	{
-		double total_loss = 0.0;  
-		
-		for (int s = 0; s < data; s++) 
+		double total_loss = 0.0;
+
+		for (int n = 0; n < ds->num_samples; ++n)
 		{
-			//compute the total loss of the forward 
-			double *h_1 = malloc(nn->h_1 * sizeof(double));
-			double *o_2 = malloc(nn->o_2 * sizeof(double));
-			
-			for (int j = 0; j < nn->h_1; j++) 
+			double *input = ds->inputs[n];
+			int label = ds->labels[n];
+
+			//fill the o_2 vector with the result of the forward
+			forward(nn, input, h_1, o_2);
+
+			// cross-entropy to calculate the loss
+			double eps = 1e-15;
+			double prob = o_2[label];
+			if (prob < eps)
+				prob = eps;
+			total_loss += -log(prob);
+
+
+			//backpropagate : compute the gradient for each layer 
+			//and update the weight and biais according to the lr
+			for (int k = 0; k < out; ++k)
 			{
-				double z = nn->b_1[j];
-				
-				for (int i = 0; i < nn->inp_0; i++)
+				double y = (k == label) ? 1.0 : 0.0;
+				grad_o_2[k] = o_2[k] - y;
+			}
+
+			for (int j = 0; j < h; ++j)
+			{
+				double sum = 0.0;
+				for (int k = 0; k < out; ++k)
 				{
-					z += inputs[s][i] * nn->w_0_1[i][j];
-					h_1[j] = sigm(z);
+					sum += nn->w_1_2[j][k] * grad_o_2[k];
 				}
-			
+				grad_h_1[j] = sum * h_1[j] * (1.0 - h_1[j]);
 			}
-			for (int k = 0; k < nn->o_2; k++) 
+
+			for (int j = 0; j < h; ++j)
 			{
-				double z = nn->b_2[k];
-				for (int j = 0; j < nn->h_1; j++)
+				for (int k = 0; k < out; ++k)
 				{
-					z += h_1[j] * nn->w_1_2[j][k];
-					o_2[k] = sigm(z);
-				}
-			}
-			
-			double error[1];
-			
-			for (int k = 0; k < nn->o_2; k++)
-			{
-				error[k] = labels[s][k] - o_2[k];
-				total_loss += error[k] * error[k];
-			}
-			
-			//compute the local loss of each neuron
-			double grad_o_2[1];
-			
-			for (int k = 0; k < nn->o_2; k++)
-			{
-				grad_o_2[k] = error[k] * sigm_prime(o_2[k]);
-			}
-			
-			double *grad_h_1 = malloc(nn->h_1 * sizeof(double));
-			
-			for (int j = 0; j < nn->h_1; j++)
-			{
-				double err = 0.0;
-				
-				for (int k = 0; k < nn->o_2; k++)
-				{
-					err += grad_o_2[k] * nn->w_1_2[j][k];
-					grad_h_1[j] = err * sigm_prime(h_1[j]);
+					nn->w_1_2[j][k] -= lr * grad_o_2[k] * h_1[j];
 				}
 			}
-			//update the weight depending on local loss and learning rate
-			for (int j = 0; j < nn->h_1; j++)
+			for (int k = 0; k < out; ++k)
 			{
-				for (int k = 0; k < nn->o_2; k++) 
+				nn->b_2[k] -= lr * grad_o_2[k];
+			}
+
+
+			for (int i = 0; i < inp; ++i)
+			{
+				for (int j = 0; j < h; ++j)
 				{
-					nn->w_1_2[j][k] += nn->lr * grad_o_2[k] * h_1[j];
+					nn->w_0_1[i][j] -= lr * grad_h_1[j] * input[i];
 				}
 			}
-			for (int i = 0; i < nn->inp_0; i++)
+			for (int j = 0; j < h; ++j)
 			{
-				for (int j = 0; j < nn->h_1; j++) 
-				{
-					nn->w_0_1[i][j] += nn->lr * grad_h_1[j] * inputs[s][i];
-				}
+				nn->b_1[j] -= lr * grad_h_1[j];
 			}
-			
-			for (int j = 0; j < nn->h_1; j++)
-			{
-				nn->b_1[j] += nn->lr * grad_h_1[j];
-			}
-			for (int k = 0; k < nn->o_2; k++)
-			{
-				nn->b_2[k] += nn->lr * grad_o_2[k];
-			}
-			
-			free(h_1);
-			free(o_2);
-			free(grad_h_1);
 		}
-		//follow the convergence each 1000 iterations 
-		if (epoch % 1000 == 0) printf("Epoch %d   Total Loss: %.6f\n", epoch, total_loss);
+
+		double moy_loss = total_loss / ds->num_samples;
+
+		nn_logf(logger, logger_userdata, "Epoch %d - loss = %f\n", epoch + 1, moy_loss);
 	}
 
+	free(h_1);
+	free(o_2);
+	free(grad_h_1);
+	free(grad_o_2);
+}
+
+//fill a .txt file with all the bias and weight from a nn given in parameter
+void nn_save(NeuralNetwork *nn, const char *filename)
+{
+	FILE *f = fopen(filename, "w");
+
+	if (!f)
+	{
+		errx(EXIT_FAILURE, "nn_save() : open file model\n");
+	}
+
+	fprintf(f, "%d %d %d\n", nn->inp_0, nn->h_1, nn->o_2);
+
+	for (int j = 0; j < nn->h_1; ++j)
+	{
+		fprintf(f, "%.15f ", nn->b_1[j]);
+	}
+	fprintf(f, "\n");
+
+	for (int i = 0; i < nn->inp_0; ++i)
+	{
+		for (int j = 0; j < nn->h_1; ++j)
+		{
+			fprintf(f, "%.15f ", nn->w_0_1[i][j]);
+		}
+	}
+	fprintf(f, "\n");
+
+	for (int k = 0; k < nn->o_2; ++k)
+	{
+		fprintf(f, "%.15f ", nn->b_2[k]);
+	}
+	fprintf(f, "\n");
+
+	for (int j = 0; j < nn->h_1; ++j)
+	{
+		for (int k = 0; k < nn->o_2; ++k)
+		{
+			fprintf(f, "%.15f ", nn->w_1_2[j][k]);
+		}
+	}
+	fprintf(f, "\n");
+
+	fclose(f);
+}
+//gereate a nn struct and fill the matirx of weight and bias 
+//with the content of the .txt file given in parameter
+NeuralNetwork *nn_load(const char *filename)
+{
+	FILE *f = fopen(filename, "r");
+	if (!f)
+	{
+		errx(EXIT_FAILURE, "nn_load : open file model\n");
+	}
+
+	int inp;
+       	int h; 
+	int out;
+
+
+	if (fscanf(f, "%d %d %d", &inp, &h, &out) != 3)
+	{
+		fclose(f);
+		errx(EXIT_FAILURE,"invalid model header\n");
+	}
+
+	NeuralNetwork *nn = init_nn(inp, h, out, 0.0);
+
+	for (int j = 0; j < nn->h_1; ++j)
+	{
+		fscanf(f, "%lf", &nn->b_1[j]);
+
+	}
+
+	for (int i = 0; i < nn->inp_0; ++i)
+	{
+		for (int j = 0; j < nn->h_1; ++j)
+		{
+			fscanf(f, "%lf", &nn->w_0_1[i][j]);
+		}
+	}
+
+	for (int k = 0; k < nn->o_2; ++k)
+	{
+		fscanf(f, "%lf", &nn->b_2[k]);
+	}
+
+	for (int j = 0; j < nn->h_1; ++j)
+	{
+		for (int k = 0; k < nn->o_2; ++k)
+		{
+			fscanf(f, "%lf", &nn->w_1_2[j][k]);
+		}
+	}
+
+	fclose(f);
+	return nn;
+}
 
 
 
+//main functions that will be called by the project when executed
 
+
+//return prediction char from a path to a file .bmp 
+//using the model.txt saved
+char nn_predict_letter(const char *model_file, const char *image_file)
+{
+	if (!model_file || !image_file)
+	{
+		errx(EXIT_FAILURE,"nn_perdict_letter : parameter error\n");
+	}
+	//initialise the nn that will make the prediction
+	NeuralNetwork *nn = nn_load(model_file);
+
+
+	double *inp_0 = malloc(sizeof(double) * INPUT_SIZE);
+
+	//compute the input vector form the image file given
+	//using the preprocess.c file
+	load_bmp_as_vector(image_file, IMG_WIDTH, IMG_HEIGHT, inp_0);
+
+	double *h_1 = malloc(sizeof(double) * nn->h_1);
+	double *o_2 = malloc(sizeof(double) * nn->o_2);
+
+	//use the nn to predict the letter 
+	forward(nn, inp_0, h_1, o_2);
+
+	int result = 0;
+
+	double max_val = o_2[0];
+	for(int i = 1; i < nn->o_2; i++)
+	{
+		if(o_2[i] > max_val)
+		{
+			max_val = o_2[i];
+			result = i;
+		}
+	}
+	
+	free(inp_0);
+	free(h_1);
+	free(o_2);
+	free_nn(nn);
+	//return the character predicted to the project
+	return (char)('A' + result);
+}
+
+//function called by the project to train the nn
+//save the model to a .txt file
+//model can be used to predict later
+void train(const char *dataset_file,
+           const char *model_out,
+           int epochs,
+           double lr,
+           int hidden_size,
+           LogFn logger,
+           void *logger_userdata)
+{
+	nn_logf(logger, logger_userdata, "loading Dataset from %s \n", dataset_file);
+	Dataset *ds = dataset_load(dataset_file);
+	if(!ds)
+	{
+		errx(EXIT_FAILURE, "dataset_load()");
+	}
+	nn_logf(logger, logger_userdata, "Dataset loaded with %d samples. \n", ds->num_samples);
+	NeuralNetwork *nn = init_nn(INPUT_SIZE, hidden_size, OUTPUT_SIZE, lr);
+	if(!nn)
+	{
+		dataset_free(ds);
+		errx(EXIT_FAILURE, "init_nn()");
+	}
+	nn_logf(logger, logger_userdata, "Training parameters :\n hidden = %d\nepochs = %d\nlr = %f \n",hidden_size, epochs, lr);
+	SGD(nn, ds, epochs, lr, logger, logger_userdata);
+	nn_save(nn, model_out);
+
+	nn_logf(logger, logger_userdata, "model saved to %s\n", model_out);
+
+	free_nn(nn);
+	dataset_free(ds);
+	nn_logf(logger, logger_userdata, "End of training\n");
+}
+
+//optimisation of the previous predict function
+char nn_predict_from_model(NeuralNetwork *nn, const char *image_file)
+{
+	if(!nn)
+	{
+		errx(EXIT_FAILURE, "nn_predict_from_nn : couldnt find nn\n"); 
+	}
+
+	double *inp_0 = malloc(sizeof(double) * INPUT_SIZE);
+
+	load_bmp_as_vector(image_file, IMG_WIDTH, IMG_HEIGHT, inp_0);
+
+	double *h_1 = malloc(sizeof(double) * nn->h_1);
+	double *o_2 = malloc(sizeof(double) * nn->o_2);
+
+	forward(nn, inp_0, h_1, o_2);
+
+	int result = 0;
+	double max_val = o_2[0];
+	for(int k = 1; k < nn->o_2; ++k)
+	{
+		if(o_2[k] > max_val)
+		{
+			max_val = o_2[k];
+			result = k;
+		}
+	}
+
+	free(inp_0);
+	free(h_1);
+	free(o_2);
+
+	return (char)('A' + result);
 }

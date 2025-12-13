@@ -2,7 +2,7 @@
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O2
-LDFLAGS_GRAPHICS = `sdl2-config --cflags --libs` -lSDL2_ttf -lm
+LDFLAGS_GRAPHICS = `sdl2-config --cflags --libs` -lSDL2_ttf -lm -lSDL2_gfx
 
 # Dossiers
 SOLVER_DIR = Solver
@@ -10,8 +10,8 @@ GRAPHICS_DIR = Graphics
 NEURAL_DIR = NeuralNetwork
 
 # Cibles
-SOLVER_TARGET = solver
-GRAPHICS_TARGET = graphics
+SOLVER_TARGET = solvers
+GRAPHICS_TARGET = graphic
 NEURAL_TARGET = neural
 
 # Sources
@@ -20,7 +20,11 @@ GRAPHICS_SRCS = $(GRAPHICS_DIR)/main.c \
                 $(GRAPHICS_DIR)/image_loader.c \
                 $(GRAPHICS_DIR)/window_manager.c \
                 $(GRAPHICS_DIR)/cmd_window.c \
-                $(GRAPHICS_DIR)/bounds.c
+                $(GRAPHICS_DIR)/bounds.c\
+		$(GRAPHICS_DIR)/detectgrid.c\
+		$ Solver/solver.c\
+                $(NEURAL_DIR)/neuralnetwork.c\
+                $(GRAPHICS_DIR)/preprocess.c
 NEURAL_SRCS = $(NEURAL_DIR)/main.c \
               $(NEURAL_DIR)/neuralnetwork.c
 
