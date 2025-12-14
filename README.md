@@ -1,4 +1,4 @@
-# Projet OCR POC - Instructions de compilation
+# Projet OCR MVP - Instructions de compilation
 
 Ce dépôt contient désormais un seul module/exécutable qui regroupe l’ancien Solver, Graphics et NeuralNetwork en une seule application OCR.
 
@@ -37,7 +37,7 @@ Cela produira un seul exécutable : ocr
 
 Lancez l’application avec :
 
-./ocr
+./ocr_epita
 
 ---
 
@@ -46,9 +46,14 @@ Lancez l’application avec :
 Pour connaître les commandes utilisables une fois l’application lancée, tapez :
 
 - man : affiche l’aide / manuel
-- auto : lance le mode automatique
 
 ---
+
+## Utiliser le mode automatique
+
+Pour lancer le pré-traitement automatique et résoudre la grille :
+
+- auto : lance le mode automatique
 
 ## Nettoyage des fichiers de compilation
 
@@ -62,5 +67,4 @@ make re
 
 ## Remarques
 
-- L’application est encore en développement. Certaines opérations peuvent provoquer des erreurs ou des incohérences selon les traitements appliqués.
 - Assurez-vous que toutes les bibliothèques SDL requises sont correctement installées avant d’exécuter make.
