@@ -22,3 +22,4 @@ void separate_grid_word_v2(Box *boxes, int boxCount,
                            int *nbLinesGrid, int *nbLinesWord,
                            float medianHeight);
 int should_use_separate_v2(Box *boxes, int boxCount, float medianHeight);
+void draw_word_surface(SDL_Surface **surface, Box ***boxes, int x1, int y1, int x2, int y2);

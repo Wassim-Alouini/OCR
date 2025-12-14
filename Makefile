@@ -11,7 +11,7 @@ NEURAL_DIR = NeuralNetwork
 
 # Cibles
 SOLVER_TARGET = solvers
-GRAPHICS_TARGET = graphic
+GRAPHICS_TARGET = ocr_epita
 NEURAL_TARGET = neural
 
 # Sources
@@ -30,13 +30,13 @@ NEURAL_SRCS = $(NEURAL_DIR)/main.c \
               $(NEURAL_DIR)/neuralnetwork.c
 
 # Règles principales
-all: solver graphics neural
+all: ocr 
 
 solver: $(SOLVER_SRCS)
 	@echo ">> Building solver..."
 	$(CC) $(CFLAGS) -o $(SOLVER_TARGET) $(SOLVER_SRCS)
 
-graphics: $(GRAPHICS_SRCS)
+ocr: $(GRAPHICS_SRCS)
 	@echo ">> Building graphics..."
 	$(CC) $(CFLAGS) -o $(GRAPHICS_TARGET) $(GRAPHICS_SRCS) $(LDFLAGS_GRAPHICS)
 
