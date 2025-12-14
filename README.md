@@ -29,7 +29,7 @@ ou :
 
 make ocr
 
-Cela produira un seul exécutable : ocr
+Cela produira un seul exécutable : ocr_epita
 
 ---
 
