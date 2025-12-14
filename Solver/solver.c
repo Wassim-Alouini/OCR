@@ -1,11 +1,11 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
 #include "solver.h"
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Turns every letter of the word into uppercase
-void strtoupper(char *word)
+void strtoupper(char* word)
 {
     int len = strlen(word);
     for (int i = 0; i < len; i++)
@@ -15,34 +15,26 @@ void strtoupper(char *word)
 }
 
 // Main algorithm to search a word inside the grid
-int algoSolver(int rows,int cols,char tab[rows][cols],char* word,
-		int* x1,int* y1, int* x2, int* y2)
+int algoSolver(int rows, int cols, char tab[rows][cols], char* word, int* x1,
+               int* y1, int* x2, int* y2)
 {
     int len = strlen(word);
     strtoupper(word); // Convert the word to uppercase
 
     // All 8 possible directions (horizontal, vertical and diagonal)
-    int directions[8][2] = {
-        {0,1},
-        {1,1},
-        {1,0},
-        {1,-1},
-        {0,-1},
-        {-1,-1},
-        {-1,0},
-        {-1,1}
-    };
+    int directions[8][2] = {{0, 1},  {1, 1},   {1, 0},  {1, -1},
+                            {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}};
 
     // Go through the whole grid
-    for(int i = 0; i < rows; i++)
+    for (int i = 0; i < rows; i++)
     {
-        for(int j = 0; j < cols; j++)
+        for (int j = 0; j < cols; j++)
         {
             // If the current cell matches the first letter of the word
-            if(tab[i][j] == word[0])
+            if (tab[i][j] == word[0])
             {
                 // Try all 8 directions
-                for(int k = 0; k < 8 ; k++)
+                for (int k = 0; k < 8; k++)
                 {
                     int indexI = i;
                     int indexJ = j;
@@ -51,16 +43,18 @@ int algoSolver(int rows,int cols,char tab[rows][cols],char* word,
                     int dj = directions[k][1];
 
                     // Check if the word can actually fit in this direction
-                    if((i + di * (len - 1) < 0) || (i + di * (len - 1) >= rows)
-                        || (j + dj * (len - 1) < 0) || (j + dj * (len - 1) >= cols))
+                    if ((i + di * (len - 1) < 0) ||
+                        (i + di * (len - 1) >= rows) ||
+                        (j + dj * (len - 1) < 0) ||
+                        (j + dj * (len - 1) >= cols))
                     {
                         continue;
                     }
 
                     // Move through the grid while letters are matching
-                    while(indexW < len && indexI >= 0 && indexI < rows
-                        && indexJ >= 0 && indexJ < cols
-                        && tab[indexI][indexJ] == word[indexW])
+                    while (indexW < len && indexI >= 0 && indexI < rows &&
+                           indexJ >= 0 && indexJ < cols &&
+                           tab[indexI][indexJ] == word[indexW])
                     {
                         indexI += di;
                         indexJ += dj;
@@ -68,13 +62,14 @@ int algoSolver(int rows,int cols,char tab[rows][cols],char* word,
                     }
 
                     // If we reached the end of the word, it means it was found
-                    if(indexW == len)
+                    if (indexW == len)
                     {
-                        printf("(%i,%i) (%i,%i)\n",i,j,indexI-di,indexJ-dj);
-			*x1 = i;
-			*y1 = j;
-			*x2 = indexI-di;
-			*y2 = indexJ-dj;
+                        // printf("(%i,%i) (%i,%i)\n", i, j, indexI - di,
+                        // indexJ - dj);
+                        *x1 = i;
+                        *y1 = j;
+                        *x2 = indexI - di;
+                        *y2 = indexJ - dj;
                         return 1;
                     }
                 }
@@ -85,20 +80,21 @@ int algoSolver(int rows,int cols,char tab[rows][cols],char* word,
 }
 
 // Reads the grid from the file and launches the search
-void solver(char* filename,char* word,int* x1,int* y1,int* x2,int* y2)
+void solver(char* filename, char* word, int* x1, int* y1, int* x2, int* y2)
 {
-    FILE *file = fopen(filename,"r");
+    FILE* file = fopen(filename, "r");
 
-    char* line = malloc(10000 * sizeof(char)); // buffer to store the grid content
+    char* line =
+        malloc(10000 * sizeof(char)); // buffer to store the grid content
     int rows = 0;
     int nbchar = 0;
     int index = 0;
     int c;
 
     // Read the file character by character to count rows and columns
-    while((c = fgetc(file)) != EOF)
+    while ((c = fgetc(file)) != EOF)
     {
-        if(c != '\n')
+        if (c != '\n')
         {
             line[index++] = c;
             nbchar++;
@@ -111,15 +107,15 @@ void solver(char* filename,char* word,int* x1,int* y1,int* x2,int* y2)
     fclose(file);
 
     line[index] = 0;
-    //rows++; // last line isn’t counted in the loop
+    // rows++; // last line isn’t counted in the loop
 
     int cols = nbchar / rows; // number of columns in the grid
 
     // Fill the 2D array with characters from the line
     char tab[rows][cols];
-    for(int i = 0; i < rows; i++)
+    for (int i = 0; i < rows; i++)
     {
-        for(int j = 0; j < cols; j++)
+        for (int j = 0; j < cols; j++)
         {
             tab[i][j] = line[i * cols + j];
         }
@@ -128,9 +124,9 @@ void solver(char* filename,char* word,int* x1,int* y1,int* x2,int* y2)
     free(line);
 
     // If the word wasn’t found, print a message
-    if(!algoSolver(rows,cols,tab,word,x1,y1,x2,y2))
+    if (!algoSolver(rows, cols, tab, word, x1, y1, x2, y2))
     {
-        printf("Not Found\n");
+        // printf("Not Found\n");
     }
 }
 
